@@ -1,52 +1,45 @@
-import { Client, GatewayIntentBits, EmbedBuilder, REST, Routes } from 'discord.js';
-import dotenv from 'dotenv';
-dotenv.config();
-
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
-
-const COMMAND = {
-  name: 'timetable_claim',
-  description: 'Claim a teaching timetable slot',
-  options: [
-    { name: 'name', type: 3, description: 'Your teaching name', required: true },
-    { name: 'year', type: 3, description: 'Year to teach (e.g., Year 10)', required: true },
-    { name: 'subject', type: 3, description: 'Subject', required: true },
-    { name: 'room', type: 3, description: 'Room (e.g., R2)', required: true }
-  ]
-};
-
-client.once('ready', async () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-  await rest.put(Routes.applicationCommands(client.user.id), { body: [COMMAND] });
-  console.log('✅ Slash command /timetable_claim registered');
-});
-
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
-  if (interaction.commandName !== COMMAND.name) return;
 
-  const name = interaction.options.getString('name');
-  const year = interaction.options.getString('year');
-  const subject = interaction.options.getString('subject');
-  const room = interaction.options.getString('room');
+  if (interaction.commandName === 'timetable_claim') {
+    await interaction.deferReply({ ephemeral: true });
 
-  const embed = new EmbedBuilder()
-    .setTitle('📝 Timetable Claim')
-    .setColor(0xFF0000)
-    .addFields(
-      { name: 'Teaching Name', value: name, inline: true },
-      { name: 'Year to Teach', value: year, inline: true },
-      { name: 'Subject', value: subject, inline: true },
-      { name: 'Room', value: room, inline: true }
-    )
-    .setFooter({ text: ' ', iconURL: process.env.BANNER_URL });
+    const name = interaction.options.getString('name');
+    const year = interaction.options.getString('year');
+    const subject = interaction.options.getString('subject');
+    const room = interaction.options.getString('room');
 
-  const channel = await client.channels.fetch(process.env.CHANNEL_ID);
-  await channel.send({ embeds: [embed] });
-  await interaction.reply({ content: '✅ Your claim has been posted!', ephemeral: true });
+    // Embed to send in the public channel
+    const claimEmbed = new EmbedBuilder()
+      .setTitle('📝 Timetable Claim')
+      .setColor(0xFF0000)
+      .addFields(
+        { name: 'Teaching Name', value: name, inline: true },
+        { name: 'Year to Teach', value: year, inline: true },
+        { name: 'Subject', value: subject, inline: true },
+        { name: 'Room', value: room, inline: true }
+      )
+      .setFooter({ text: ' ', iconURL: process.env.BANNER_URL });
+
+    // Embed to DM the user confirming their claim
+    const dmEmbed = new EmbedBuilder()
+      .setTitle('✅ Timetable Claim Confirmed')
+      .setColor(0x00FF00)
+      .setDescription(`Your claim has been posted!\n\n**Name:** ${name}\n**Year:** ${year}\n**Subject:** ${subject}\n**Room:** ${room}`);
+
+    try {
+      // Send embed to the claim channel
+      const channel = await client.channels.fetch(process.env.CHANNEL_ID);
+      await channel.send({ embeds: [claimEmbed] });
+
+      // DM the user confirming claim
+      await interaction.user.send({ embeds: [dmEmbed] });
+
+      // Reply ephemeral in the interaction
+      await interaction.editReply('✅ Your claim has been posted and a confirmation DM has been sent!');
+    } catch (error) {
+      console.error('Error handling claim:', error);
+      await interaction.editReply('❌ There was an error processing your claim. Please try again later.');
+    }
+  }
 });
-
-client.login(process.env.DISCORD_TOKEN);
